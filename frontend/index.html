@@ -605,7 +605,8 @@ el('btnScore').onclick = async () => {
   const nextId = getNextQuestionId(qid);
   if(nextId){
     // pickQuestion(nextId);
-    setTimeout(() => pickQuestion(nextId), 1500);
+    //自动下一题前加延迟，比如 5 秒
+    setTimeout(() => pickQuestion(nextId), 5000);
   } else {
     showSummary();
   }
