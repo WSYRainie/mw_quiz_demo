@@ -1,0 +1,1345 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>MW答题系统 Demo</title>
+  <style>
+    body{font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"PingFang SC","Microsoft Yahei",sans-serif;margin:0;background:#f6f7fb;}
+    .wrap{max-width:980px;margin:0 auto;padding:24px;}
+    .card{background:#fff;border-radius:14px;padding:18px 18px;box-shadow:0 6px 24px rgba(0,0,0,.06);margin-bottom:14px;}
+    h1{font-size:20px;margin:0 0 10px;}
+    .row{display:flex;gap:12px;flex-wrap:wrap}
+    select,textarea,button{font-size:14px}
+    select{padding:10px 12px;border-radius:10px;border:1px solid #d7d9e0;background:#fff}
+    textarea{width:100%;min-height:140px;border-radius:12px;border:1px solid #d7d9e0;padding:12px;line-height:1.5;resize:vertical}
+    button{padding:10px 14px;border-radius:12px;border:0;background:#111;color:#fff;cursor:pointer}
+    button.secondary{background:#e9ecf3;color:#111}
+    button.ghost{background:transparent;color:#111;border:1px solid #d7d9e0}
+    .pill{display:inline-block;padding:4px 10px;border-radius:999px;background:#eef2ff;font-size:12px;margin-right:6px}
+    .muted{color:#6b7280;font-size:13px}
+    .score{font-size:34px;font-weight:700}
+    .grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+    @media (max-width:820px){.grid{grid-template-columns:1fr}}
+    pre{white-space:pre-wrap;background:#0b1020;color:#d1e7ff;padding:12px;border-radius:12px;overflow:auto}
+    ul{margin:8px 0 0 18px}
+
+    /* LLM 可视化增强 */
+    .badge{display:inline-block;padding:3px 8px;border-radius:999px;font-size:12px;margin-right:6px;background:#eef2ff}
+    .badge.red{background:#fee2e2}
+    .badge.green{background:#dcfce7}
+    .badge.gray{background:#f1f5f9}
+    .kv{display:flex;gap:10px;flex-wrap:wrap;margin-top:8px}
+    .kv .item{background:#f6f7fb;border:1px solid #e5e7eb;border-radius:12px;padding:10px 12px}
+    .kv .label{color:#6b7280;font-size:12px}
+    .kv .value{font-size:16px;font-weight:700;margin-top:2px}
+    .hr{height:1px;background:#eef2f7;margin:12px 0}
+    .small{font-size:12px;color:#6b7280}
+
+    /* 进度条 */
+    .progress{display:flex;align-items:center;gap:10px;margin-top:10px}
+    .bar{flex:1;height:10px;background:#eef2f7;border-radius:999px;overflow:hidden}
+    .bar>div{height:100%;background:#111;border-radius:999px;width:0%}
+
+    /* PK 面板 */
+    .pkWrap{
+      display:none;
+      margin-top:12px;
+      padding:12px;
+      border:1px solid #e5e7eb;
+      border-radius:12px;
+      background:#fafafa;
+    }
+    .pkRow{
+      display:flex;
+      align-items:center;
+      gap:10px;
+      margin-top:10px;
+    }
+    .pkRow:first-child{margin-top:0}
+    .name{min-width:64px;font-size:13px;color:#111;font-weight:600}
+
+    .bar.alt{background:#f1f5f9}
+    .bar.alt>div{background:#4b5563}
+    .status{font-size:12px;color:#6b7280;margin-top:8px}
+    .toggle{display:flex;align-items:center;gap:8px;margin-top:8px}
+    .toggle input{transform:scale(1.1)}
+    table{width:100%;border-collapse:collapse}
+    th,td{border-bottom:1px solid #eef2f7;padding:10px 6px;text-align:left}
+    th{font-size:12px;color:#6b7280;font-weight:600}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card">
+      <h1>MW答题系统 Demo</h1>
+
+      <div class="row">
+        <div>
+          <div class="muted">选择课次</div>
+          <select id="lessonSelect"></select>
+        </div>
+
+        <div>
+          <div class="muted">选择题目</div>
+          <select id="questionSelect"></select>
+        </div>
+
+        <div>
+          <div class="muted">评分模式</div>
+          <select id="modeSelect">
+            <option value="rule">规则评分</option>
+            <option value="llm">大模型评分</option>
+            <option value="hybrid">混合评分</option>
+          </select>
+        </div>
+
+        <div style="margin-left:auto;display:flex;gap:10px;align-items:end">
+          <button class="secondary" id="btnShowRef">显示/隐藏参考答案</button>
+          <button class="ghost" id="btnReset">重置本次作答</button>
+          <button id="btnScore">提交并进入下一题</button>
+        </div>
+      </div>
+
+      <div class="toggle">
+        <input type="checkbox" id="pkToggle" />
+        <label for="pkToggle" class="muted">PK 模式（显示对手进度）</label>
+      </div>
+
+      <!-- 普通进度（始终显示） -->
+      <div id="progressArea">
+        <div class="progress">
+          <div class="muted" id="progressText">进度：0/0</div>
+          <div class="bar"><div id="progressBar"></div></div>
+          <div class="muted" id="totalText">总分：0</div>
+        </div>
+      
+        <div class="pkWrap" id="pkWrap">
+          <div class="pkRow">
+            <div class="name">你</div>
+            <div class="bar"><div id="pkBarMe"></div></div>
+            <div class="muted" id="pkMeText">0/0</div>
+          </div>
+          <div class="pkRow">
+            <div class="name">对手</div>
+            <div class="bar alt"><div id="pkBarRival"></div></div>
+            <div class="muted" id="pkRivalText">0/0</div>
+          </div>
+          <div class="status" id="pkStatus">PK 状态：-</div>
+        </div>
+      </div>
+      
+
+    <div class="card" id="qCard" style="display:none">
+      <div class="muted">题干</div>
+      <div id="stem" style="margin-top:6px;font-size:16px;line-height:1.6"></div>
+      <div style="margin-top:10px">
+        <span class="pill">建议结构：判断 + 理由 + 解释 + 结果</span>
+      </div>
+      <div style="margin-top:12px" class="muted">作答</div>
+      <textarea id="answerBox" placeholder="写下你的答案..."></textarea>
+
+      <div id="refWrap" style="display:none;margin-top:12px">
+        <div class="muted">参考答案（Demo里默认可见，正式系统建议由老师控制是否展示）</div>
+        <pre id="refAns"></pre>
+      </div>
+    </div>
+
+    <div class="grid" id="resultGrid" style="display:none">
+      <div class="card">
+        <div class="muted">本题评分结果</div>
+        <div class="score" id="scoreNum">-</div>
+        <div class="muted">满分 10</div>
+        <div style="margin-top:10px" id="feedback"></div>
+      </div>
+      <div class="card">
+        <div class="muted">调试数据（Raw JSON）</div>
+        <pre id="details"></pre>
+      </div>
+    </div>
+
+    <div class="card" id="summaryCard" style="display:none">
+      <h1 style="margin:0 0 6px">全部完成 ✅</h1>
+      <div class="muted">这里是本次作答的总分与明细。</div>
+
+      <div class="kv" style="margin-top:12px">
+        <div class="item">
+          <div class="label">总分</div>
+          <div class="value" id="finalTotal">0</div>
+        </div>
+        <div class="item">
+          <div class="label">完成题数</div>
+          <div class="value" id="finalCount">0</div>
+        </div>
+        <div class="item">
+          <div class="label">平均分</div>
+          <div class="value" id="finalAvg">0</div>
+        </div>
+      </div>
+
+      <div class="hr"></div>
+
+      <div style="display:flex;gap:10px;flex-wrap:wrap">
+        <button class="secondary" id="btnReviewFirst">回到第一题查看</button>
+        <button id="btnRestart">重新开始</button>
+      </div>
+
+      <div class="hr"></div>
+
+      <div class="muted">每题明细</div>
+      <div style="overflow:auto;margin-top:8px">
+        <table>
+          <thead>
+            <tr>
+              <th>题号</th>
+              <th>模式</th>
+              <th>本题得分</th>
+              <th>规则分</th>
+              <th>LLM分/最终</th>
+              <th>复核</th>
+            </tr>
+          </thead>
+          <tbody id="summaryTable"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+<script>
+const state = {
+  lessons: [],
+  questions: [],
+  currentQuestion: null,
+  refVisible: false,
+
+  // 作答结果
+  results: {},         // { [questionId]: { mode, score_used, raw } }
+  answeredCount: 0,
+  totalScore: 0,
+
+  // PK 状态
+  pkEnabled: false,
+  rivalDone: 0,
+  rivalBias: 0,        // 对手“偏置”：>0 更容易领先，<0 更容易落后
+  rivalSpeed: 0.6,     // 对手推进概率（0~1），越大越快
+};
+
+async function api(path, opts){
+  const res = await fetch(path, opts);
+  if(!res.ok) throw new Error(await res.text());
+  return res.json();
+}
+function el(id){ return document.getElementById(id); }
+function esc(s){
+  return String(s ?? '').replace(/[&<>"']/g, m => ({
+    '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+  }[m]));
+}
+
+function renderLLMCard(llm){
+  if(!llm) return `<div class="muted">没有 LLM 输出</div>`;
+  const decision = llm.decision || '不确定';
+  const score = (llm.score ?? '-');
+  const conf = (llm.confidence ?? '-');
+
+  const decisionBadge =
+    decision === '同意' ? `<span class="badge green">同意</span>` :
+    decision === '不同意' ? `<span class="badge red">不同意</span>` :
+    `<span class="badge gray">不确定</span>`;
+
+  const strengths = (llm.strengths || []).map(x=>`<li>${esc(x)}</li>`).join('') || `<li class="muted">（无）</li>`;
+  const issues = (llm.issues || []).map(x=>`<li>${esc(x)}</li>`).join('') || `<li class="muted">（无）</li>`;
+  const miss = (llm.missing_points || []).map(x=>`<li>${esc(x)}</li>`).join('') || `<li class="muted">（无）</li>`;
+
+  return `
+    <div style="margin-top:6px">
+      ${decisionBadge}
+      <span class="badge">LLM评分：${esc(score)}/10</span>
+      <span class="badge gray">置信度：${esc(conf)}</span>
+    </div>
+
+    <div class="kv">
+      <div class="item">
+        <div class="label">判定</div>
+        <div class="value">${esc(decision)}</div>
+      </div>
+      <div class="item">
+        <div class="label">分数</div>
+        <div class="value">${esc(score)}</div>
+      </div>
+      <div class="item">
+        <div class="label">置信度</div>
+        <div class="value">${esc(conf)}</div>
+      </div>
+    </div>
+
+    <div class="hr"></div>
+
+    <div><b>✅ 优点</b><ul>${strengths}</ul></div>
+    <div><b>⚠️ 问题</b><ul>${issues}</ul></div>
+    <div><b>🧩 缺失点</b><ul>${miss}</ul></div>
+
+    <div class="hr"></div>
+
+    <div><b>✍️ 建议</b><div>${esc(llm.suggestion || '')}</div></div>
+  `;
+}
+
+function updateProgressUI(){
+  const total = state.questions.length;
+  const done = state.answeredCount;
+
+  el('progressText').textContent = `进度：${done}/${total}`;
+  el('totalText').textContent = `总分：${state.totalScore}`;
+  const pct = total ? Math.round((done / total) * 100) : 0;
+  el('progressBar').style.width = pct + '%';
+
+  // PK
+  if(state.pkEnabled){
+    const total = state.questions.length;
+    const done = state.answeredCount;
+
+    el('pkMeText').textContent = `${done}/${total}`;
+    el('pkRivalText').textContent = `${state.rivalDone}/${total}`;
+
+    const mePct = total ? Math.round((done / total) * 100) : 0;
+    const rvPct = total ? Math.round((state.rivalDone / total) * 100) : 0;
+    el('pkBarMe').style.width = mePct + '%';
+    el('pkBarRival').style.width = rvPct + '%';
+
+    let status = 'PK 状态：';
+    if(done > state.rivalDone) status += `你领先 ${done - state.rivalDone} 题`;
+    else if(done < state.rivalDone) status += `对手领先 ${state.rivalDone - done} 题`;
+    else status += '平局';
+    el('pkStatus').textContent = status;
+  }
+
+
+}
+
+function getOrderedQuestionIds(){
+  return state.questions.map(q => q.id);
+}
+function getNextQuestionId(currentId){
+  const ids = getOrderedQuestionIds();
+  const idx = ids.indexOf(currentId);
+  if (idx < 0) return null;
+  return ids[idx + 1] || null;
+}
+
+function renderLessons(){
+  const sel = el('lessonSelect');
+  sel.innerHTML = state.lessons.map(l => `<option value="${esc(l.id)}">${esc(l.title)}</option>`).join('');
+  sel.onchange = () => loadQuestions(sel.value, true);
+}
+
+function renderQuestions(){
+  const sel = el('questionSelect');
+  sel.innerHTML = state.questions.map(q => `<option value="${esc(q.id)}">${esc(q.id)}</option>`).join('');
+  sel.onchange = () => pickQuestion(sel.value);
+  if(state.questions.length) pickQuestion(state.questions[0].id);
+}
+
+function pickQuestion(qid){
+  state.currentQuestion = state.questions.find(q => q.id === qid);
+  if(!state.currentQuestion) return;
+
+  el('summaryCard').style.display = 'none';
+  el('qCard').style.display = '';
+  el('resultGrid').style.display = 'none';
+
+  el('stem').textContent = state.currentQuestion.stem;
+  el('refAns').textContent = state.currentQuestion.reference_answer;
+  el('answerBox').value = '';
+
+  el('questionSelect').value = qid;
+}
+
+async function loadLessons(){
+  state.lessons = await api('/api/lessons');
+  renderLessons();
+  await loadQuestions(state.lessons[0]?.id, true);
+}
+
+async function loadQuestions(lessonId, resetSession){
+  state.questions = await api('/api/questions?lesson_id=' + encodeURIComponent(lessonId));
+  renderQuestions();
+
+  if(resetSession){
+    resetAttempt();
+  } else {
+    updateProgressUI();
+  }
+}
+
+function resetAttempt(){
+  state.results = {};
+  state.answeredCount = 0;
+  state.totalScore = 0;
+
+  // PK 重置：对手从 0 开始，并随机一个“性格”
+  state.rivalDone = 0;
+  // rivalBias: -0.15 ~ +0.15
+  state.rivalBias = (Math.random() * 0.3) - 0.15;
+  // rivalSpeed: 0.55 ~ 0.8
+  state.rivalSpeed = 0.55 + Math.random() * 0.25;
+
+  updateProgressUI();
+  if(state.questions.length) pickQuestion(state.questions[0].id);
+}
+
+function pickScoreUsed(out){
+  if(out.mode === 'hybrid') return Number(out.final_score ?? 0);
+  if(out.mode === 'llm') {
+    if (out.final_score != null) return Number(out.final_score);
+    return Number(out.llm?.score ?? 0);
+  }
+  return Number(out.score ?? 0);
+}
+
+// 对手推进策略：每次你完成一题后，对手有一定概率推进 0~2 题
+function advanceRival(){
+  if(!state.pkEnabled) return;
+  const total = state.questions.length;
+  if(state.rivalDone >= total) return;
+
+  // 让对手倾向于“咬得很紧”：如果你领先太多，对手更可能追；如果对手领先太多，就放慢
+  const gap = state.answeredCount - state.rivalDone; // >0 你领先
+  let p = state.rivalSpeed;
+
+  if(gap >= 2) p += 0.15;       // 你领先多 → 对手更努力
+  if(gap <= -2) p -= 0.10;      // 对手领先多 → 稍放缓
+  p += state.rivalBias;         // 对手性格
+  p = Math.max(0.2, Math.min(0.95, p));
+
+  // 抽一次是否推进
+  const r = Math.random();
+  if(r < p){
+    // 推进 1 或 2 题，2题概率较小
+    let step = 1;
+    if(Math.random() < 0.25) step = 2;
+
+    state.rivalDone = Math.min(total, state.rivalDone + step);
+  }
+}
+
+function showSummary(){
+  el('qCard').style.display = 'none';
+  el('resultGrid').style.display = 'none';
+  el('summaryCard').style.display = '';
+
+  const total = state.questions.length;
+  const sum = state.totalScore;
+  const avg = total ? (sum / total).toFixed(1) : '0';
+
+  el('finalTotal').textContent = String(sum);
+  el('finalCount').textContent = String(total);
+  el('finalAvg').textContent = String(avg);
+
+  const tbody = el('summaryTable');
+  tbody.innerHTML = state.questions.map(q => {
+    const r = state.results[q.id];
+    if(!r){
+      return `<tr><td>${esc(q.id)}</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td></tr>`;
+    }
+    const out = r.raw;
+    const mode = r.mode;
+    const scoreUsed = r.score_used;
+
+    const ruleScore = out.rule?.score ?? (out.score ?? '-');
+    const llmScore = out.llm?.score ?? (out.final_score ?? '-');
+    const needs = out.needs_review ? '⚠️' : '';
+
+    return `
+      <tr>
+        <td>${esc(q.id)}</td>
+        <td>${esc(mode)}</td>
+        <td><b>${esc(scoreUsed)}</b></td>
+        <td>${esc(ruleScore)}</td>
+        <td>${esc(llmScore)}</td>
+        <td>${esc(needs)}</td>
+      </tr>
+    `;
+  }).join('');
+}
+
+// --- UI events ---
+el('btnShowRef').onclick = () => {
+  state.refVisible = !state.refVisible;
+  el('refWrap').style.display = state.refVisible ? '' : 'none';
+};
+
+el('btnReset').onclick = () => resetAttempt();
+el('btnRestart').onclick = () => resetAttempt();
+el('btnReviewFirst').onclick = () => {
+  if(state.questions.length) pickQuestion(state.questions[0].id);
+};
+
+el('pkToggle').onchange = (e) => {
+  state.pkEnabled = !!e.target.checked;
+
+  const w = el('pkWrap');
+  if (state.pkEnabled) {
+    // 强制显示 + 给出尺寸
+    w.style.display = 'block';
+    w.style.padding = '12px';
+    w.style.marginTop = '12px';
+    w.style.border = '1px solid #e5e7eb';
+    w.style.borderRadius = '12px';
+    w.style.background = '#fafafa';
+  } else {
+    w.style.display = 'none';
+  }
+
+  updateProgressUI();
+};
+
+el('btnScore').onclick = async () => {
+  const q = state.currentQuestion;
+  if(!q) return;
+
+  const answer_text = el('answerBox').value;
+  const mode = el('modeSelect').value;
+
+  if(!answer_text.trim()){
+    el('resultGrid').style.display = '';
+    el('scoreNum').textContent = '-';
+    el('feedback').innerHTML = `<span class="badge red">请先作答</span>`;
+    el('details').textContent = '';
+    return;
+  }
+
+  let out;
+  try {
+    out = await api(`/api/score?mode=${mode}`, {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ question_id: q.id, answer_text })
+    });
+  } catch (e) {
+    el('resultGrid').style.display = '';
+    el('scoreNum').textContent = '-';
+    el('feedback').innerHTML = `<span class="badge red">请求失败</span><div class="hr"></div><pre>${esc(String(e))}</pre>`;
+    el('details').textContent = '';
+    return;
+  }
+
+  // 展示本题结果（短暂可见，马上跳下一题）
+  el('resultGrid').style.display = '';
+  let scoreText = '-';
+  let feedbackHtml = '';
+
+  if (out.mode === 'rule') {
+    scoreText = out.score;
+    feedbackHtml = out.feedback?.length
+      ? `<div><b>提示</b><ul>${out.feedback.map(x => `<li>${esc(x)}</li>`).join('')}</ul></div>`
+      : `<div class="muted">规则评分：结构与关键词基本齐全 👍</div>`;
+  }
+
+  if (out.mode === 'llm') {
+    scoreText = out.llm?.score ?? '-';
+    feedbackHtml = renderLLMCard(out.llm);
+  }
+
+  if (out.mode === 'hybrid') {
+    scoreText = out.final_score ?? '-';
+    feedbackHtml = `
+      <div style="margin-top:6px">
+        <span class="badge">最终分：${esc(out.final_score)}/10</span>
+        <span class="badge gray">规则分：${esc(out.rule?.score)}</span>
+        <span class="badge gray">LLM分：${esc(out.llm?.score)}</span>
+        ${out.needs_review ? `<span class="badge red">建议人工复核</span>` : `<span class="badge green">一致性良好</span>`}
+      </div>
+      <div class="hr"></div>
+      ${renderLLMCard(out.llm)}
+    `;
+  }
+
+  el('scoreNum').textContent = scoreText;
+  el('feedback').innerHTML = feedbackHtml;
+  el('details').textContent = JSON.stringify(out, null, 2);
+
+  // 计分入账
+  const qid = q.id;
+  const newScore = pickScoreUsed(out);
+
+  if(state.results[qid]){
+    state.totalScore -= Number(state.results[qid].score_used || 0);
+  } else {
+    state.answeredCount += 1;
+  }
+  state.results[qid] = { mode: out.mode, score_used: newScore, raw: out };
+  state.totalScore += newScore;
+
+  // 对手推进（PK）
+  advanceRival();
+
+  updateProgressUI();
+
+  // 自动下一题 / 总结页
+  const nextId = getNextQuestionId(qid);
+  if(nextId){
+    pickQuestion(nextId);
+  } else {
+    showSummary();
+  }
+};
+
+loadLessons();
+updateProgressUI();
+</script>
+</body>
+</html>
+
+
+
+
+<!-- 连贯答题版本 -->
+
+<!-- <!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>MW答题系统 Demo</title>
+  <style>
+    body{font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"PingFang SC","Microsoft Yahei",sans-serif;margin:0;background:#f6f7fb;}
+    .wrap{max-width:980px;margin:0 auto;padding:24px;}
+    .card{background:#fff;border-radius:14px;padding:18px 18px;box-shadow:0 6px 24px rgba(0,0,0,.06);margin-bottom:14px;}
+    h1{font-size:20px;margin:0 0 10px;}
+    .row{display:flex;gap:12px;flex-wrap:wrap}
+    select,textarea,button{font-size:14px}
+    select{padding:10px 12px;border-radius:10px;border:1px solid #d7d9e0;background:#fff}
+    textarea{width:100%;min-height:140px;border-radius:12px;border:1px solid #d7d9e0;padding:12px;line-height:1.5;resize:vertical}
+    button{padding:10px 14px;border-radius:12px;border:0;background:#111;color:#fff;cursor:pointer}
+    button.secondary{background:#e9ecf3;color:#111}
+    button.ghost{background:transparent;color:#111;border:1px solid #d7d9e0}
+    .pill{display:inline-block;padding:4px 10px;border-radius:999px;background:#eef2ff;font-size:12px;margin-right:6px}
+    .muted{color:#6b7280;font-size:13px}
+    .score{font-size:34px;font-weight:700}
+    .grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+    @media (max-width:820px){.grid{grid-template-columns:1fr}}
+    pre{white-space:pre-wrap;background:#0b1020;color:#d1e7ff;padding:12px;border-radius:12px;overflow:auto}
+    ul{margin:8px 0 0 18px}
+
+    /* LLM 可视化增强 */
+    .badge{display:inline-block;padding:3px 8px;border-radius:999px;font-size:12px;margin-right:6px;background:#eef2ff}
+    .badge.red{background:#fee2e2}
+    .badge.green{background:#dcfce7}
+    .badge.gray{background:#f1f5f9}
+    .kv{display:flex;gap:10px;flex-wrap:wrap;margin-top:8px}
+    .kv .item{background:#f6f7fb;border:1px solid #e5e7eb;border-radius:12px;padding:10px 12px}
+    .kv .label{color:#6b7280;font-size:12px}
+    .kv .value{font-size:16px;font-weight:700;margin-top:2px}
+    .hr{height:1px;background:#eef2f7;margin:12px 0}
+    .small{font-size:12px;color:#6b7280}
+
+    .progress{display:flex;align-items:center;gap:10px;margin-top:10px}
+    .bar{flex:1;height:10px;background:#eef2f7;border-radius:999px;overflow:hidden}
+    .bar>div{height:100%;background:#111;border-radius:999px;width:0%}
+    table{width:100%;border-collapse:collapse}
+    th,td{border-bottom:1px solid #eef2f7;padding:10px 6px;text-align:left}
+    th{font-size:12px;color:#6b7280;font-weight:600}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card">
+      <h1>MW答题系统 Demo</h1>
+
+      <div class="row">
+        <div>
+          <div class="muted">选择课次</div>
+          <select id="lessonSelect"></select>
+        </div>
+
+        <div>
+          <div class="muted">选择题目</div>
+          <select id="questionSelect"></select>
+        </div>
+
+        <div>
+          <div class="muted">评分模式</div>
+          <select id="modeSelect">
+            <option value="rule">规则评分</option>
+            <option value="llm">大模型评分</option>
+            <option value="hybrid">混合评分</option>
+          </select>
+        </div>
+
+        <div style="margin-left:auto;display:flex;gap:10px;align-items:end">
+          <button class="secondary" id="btnShowRef">显示/隐藏参考答案</button>
+          <button class="ghost" id="btnReset">重置本次作答</button>
+          <button id="btnScore">提交并进入下一题</button>
+        </div>
+      </div>
+
+      <div class="progress">
+        <div class="muted" id="progressText">进度：0/0</div>
+        <div class="bar"><div id="progressBar"></div></div>
+        <div class="muted" id="totalText">总分：0</div>
+      </div>
+    </div>
+
+    <div class="card" id="qCard" style="display:none">
+      <div class="muted">题干</div>
+      <div id="stem" style="margin-top:6px;font-size:16px;line-height:1.6"></div>
+      <div style="margin-top:10px">
+        <span class="pill">建议结构：判断 + 理由 + 解释 + 结果</span>
+      </div>
+      <div style="margin-top:12px" class="muted">作答</div>
+      <textarea id="answerBox" placeholder="写下你的答案..."></textarea>
+
+      <div id="refWrap" style="display:none;margin-top:12px">
+        <div class="muted">参考答案（Demo里默认可见，正式系统建议由老师控制是否展示）</div>
+        <pre id="refAns"></pre>
+      </div>
+    </div>
+
+    <div class="grid" id="resultGrid" style="display:none">
+      <div class="card">
+        <div class="muted">本题评分结果</div>
+        <div class="score" id="scoreNum">-</div>
+        <div class="muted">满分 10</div>
+        <div style="margin-top:10px" id="feedback"></div>
+      </div>
+      <div class="card">
+        <div class="muted">调试数据（Raw JSON）</div>
+        <pre id="details"></pre>
+      </div>
+    </div>
+
+    <div class="card" id="summaryCard" style="display:none">
+      <h1 style="margin:0 0 6px">全部完成 ✅</h1>
+      <div class="muted">这里是本次作答的总分与明细。</div>
+
+      <div class="kv" style="margin-top:12px">
+        <div class="item">
+          <div class="label">总分</div>
+          <div class="value" id="finalTotal">0</div>
+        </div>
+        <div class="item">
+          <div class="label">完成题数</div>
+          <div class="value" id="finalCount">0</div>
+        </div>
+        <div class="item">
+          <div class="label">平均分</div>
+          <div class="value" id="finalAvg">0</div>
+        </div>
+      </div>
+
+      <div class="hr"></div>
+
+      <div style="display:flex;gap:10px;flex-wrap:wrap">
+        <button class="secondary" id="btnReviewFirst">回到第一题查看</button>
+        <button id="btnRestart">重新开始</button>
+      </div>
+
+      <div class="hr"></div>
+
+      <div class="muted">每题明细</div>
+      <div style="overflow:auto;margin-top:8px">
+        <table>
+          <thead>
+            <tr>
+              <th>题号</th>
+              <th>模式</th>
+              <th>本题得分</th>
+              <th>规则分</th>
+              <th>LLM分/最终</th>
+              <th>复核</th>
+            </tr>
+          </thead>
+          <tbody id="summaryTable"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+<script>
+const state = {
+  lessons: [],
+  questions: [],
+  currentQuestion: null,
+  refVisible: false,
+
+  // 新增：作答结果
+  results: {},         // { [questionId]: { mode, score_used, raw } }
+  answeredCount: 0,
+  totalScore: 0,
+};
+
+async function api(path, opts){
+  const res = await fetch(path, opts);
+  if(!res.ok) throw new Error(await res.text());
+  return res.json();
+}
+function el(id){ return document.getElementById(id); }
+function esc(s){
+  return String(s ?? '').replace(/[&<>"']/g, m => ({
+    '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+  }[m]));
+}
+
+function renderLLMCard(llm){
+  if(!llm) return `<div class="muted">没有 LLM 输出</div>`;
+  const decision = llm.decision || '不确定';
+  const score = (llm.score ?? '-');
+  const conf = (llm.confidence ?? '-');
+
+  const decisionBadge =
+    decision === '同意' ? `<span class="badge green">同意</span>` :
+    decision === '不同意' ? `<span class="badge red">不同意</span>` :
+    `<span class="badge gray">不确定</span>`;
+
+  const strengths = (llm.strengths || []).map(x=>`<li>${esc(x)}</li>`).join('') || `<li class="muted">（无）</li>`;
+  const issues = (llm.issues || []).map(x=>`<li>${esc(x)}</li>`).join('') || `<li class="muted">（无）</li>`;
+  const miss = (llm.missing_points || []).map(x=>`<li>${esc(x)}</li>`).join('') || `<li class="muted">（无）</li>`;
+
+  return `
+    <div style="margin-top:6px">
+      ${decisionBadge}
+      <span class="badge">LLM评分：${esc(score)}/10</span>
+      <span class="badge gray">置信度：${esc(conf)}</span>
+    </div>
+
+    <div class="kv">
+      <div class="item">
+        <div class="label">判定</div>
+        <div class="value">${esc(decision)}</div>
+      </div>
+      <div class="item">
+        <div class="label">分数</div>
+        <div class="value">${esc(score)}</div>
+      </div>
+      <div class="item">
+        <div class="label">置信度</div>
+        <div class="value">${esc(conf)}</div>
+      </div>
+    </div>
+
+    <div class="hr"></div>
+
+    <div><b>✅ 优点</b><ul>${strengths}</ul></div>
+    <div><b>⚠️ 问题</b><ul>${issues}</ul></div>
+    <div><b>🧩 缺失点</b><ul>${miss}</ul></div>
+
+    <div class="hr"></div>
+
+    <div><b>✍️ 建议</b><div>${esc(llm.suggestion || '')}</div></div>
+  `;
+}
+
+function updateProgressUI(){
+  const total = state.questions.length;
+  const done = state.answeredCount;
+  el('progressText').textContent = `进度：${done}/${total}`;
+  el('totalText').textContent = `总分：${state.totalScore}`;
+  const pct = total ? Math.round((done / total) * 100) : 0;
+  el('progressBar').style.width = pct + '%';
+}
+
+function getOrderedQuestionIds(){
+  return state.questions.map(q => q.id);
+}
+
+function getNextQuestionId(currentId){
+  const ids = getOrderedQuestionIds();
+  const idx = ids.indexOf(currentId);
+  if (idx < 0) return null;
+  return ids[idx + 1] || null;
+}
+
+function renderLessons(){
+  const sel = el('lessonSelect');
+  sel.innerHTML = state.lessons.map(l => `<option value="${esc(l.id)}">${esc(l.title)}</option>`).join('');
+  sel.onchange = () => loadQuestions(sel.value, true);
+}
+
+function renderQuestions(){
+  const sel = el('questionSelect');
+  sel.innerHTML = state.questions.map(q => `<option value="${esc(q.id)}">${esc(q.id)}</option>`).join('');
+  sel.onchange = () => pickQuestion(sel.value);
+  if(state.questions.length) pickQuestion(state.questions[0].id);
+}
+
+function pickQuestion(qid){
+  state.currentQuestion = state.questions.find(q => q.id === qid);
+  if(!state.currentQuestion) return;
+
+  el('summaryCard').style.display = 'none';
+  el('qCard').style.display = '';
+  el('resultGrid').style.display = 'none';
+
+  el('stem').textContent = state.currentQuestion.stem;
+  el('refAns').textContent = state.currentQuestion.reference_answer;
+  el('answerBox').value = '';
+
+  // 同步下拉题目
+  el('questionSelect').value = qid;
+}
+
+async function loadLessons(){
+  state.lessons = await api('/api/lessons');
+  renderLessons();
+  await loadQuestions(state.lessons[0]?.id, true);
+}
+
+async function loadQuestions(lessonId, resetSession){
+  state.questions = await api('/api/questions?lesson_id=' + encodeURIComponent(lessonId));
+  renderQuestions();
+
+  if(resetSession){
+    resetAttempt();
+  } else {
+    updateProgressUI();
+  }
+}
+
+function resetAttempt(){
+  state.results = {};
+  state.answeredCount = 0;
+  state.totalScore = 0;
+  updateProgressUI();
+  if(state.questions.length) pickQuestion(state.questions[0].id);
+}
+
+function pickScoreUsed(out){
+  // 统一取“用于计入总分的分数”
+  if(out.mode === 'hybrid') return Number(out.final_score ?? 0);
+  if(out.mode === 'llm') {
+    // 如果你后端未来在 llm 模式返回 final_score，就优先用它
+    if (out.final_score != null) return Number(out.final_score);
+    return Number(out.llm?.score ?? 0);
+  }
+  return Number(out.score ?? 0);
+}
+
+function showSummary(){
+  el('qCard').style.display = 'none';
+  el('resultGrid').style.display = 'none';
+  el('summaryCard').style.display = '';
+
+  const total = state.questions.length;
+  const sum = state.totalScore;
+  const avg = total ? (sum / total).toFixed(1) : '0';
+
+  el('finalTotal').textContent = String(sum);
+  el('finalCount').textContent = String(total);
+  el('finalAvg').textContent = String(avg);
+
+  const tbody = el('summaryTable');
+  tbody.innerHTML = state.questions.map(q => {
+    const r = state.results[q.id];
+    if(!r){
+      return `<tr><td>${esc(q.id)}</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td></tr>`;
+    }
+    const out = r.raw;
+    const mode = r.mode;
+    const scoreUsed = r.score_used;
+
+    const ruleScore = out.rule?.score ?? (out.score ?? '-');
+    const llmScore = out.llm?.score ?? (out.final_score ?? '-');
+    const needs = out.needs_review ? '⚠️' : '';
+
+    return `
+      <tr>
+        <td>${esc(q.id)}</td>
+        <td>${esc(mode)}</td>
+        <td><b>${esc(scoreUsed)}</b></td>
+        <td>${esc(ruleScore)}</td>
+        <td>${esc(llmScore)}</td>
+        <td>${esc(needs)}</td>
+      </tr>
+    `;
+  }).join('');
+}
+
+el('btnShowRef').onclick = () => {
+  state.refVisible = !state.refVisible;
+  el('refWrap').style.display = state.refVisible ? '' : 'none';
+};
+
+el('btnReset').onclick = () => resetAttempt();
+el('btnRestart').onclick = () => resetAttempt();
+el('btnReviewFirst').onclick = () => {
+  if(state.questions.length) pickQuestion(state.questions[0].id);
+};
+
+el('btnScore').onclick = async () => {
+  const q = state.currentQuestion;
+  if(!q) return;
+
+  const answer_text = el('answerBox').value;
+  const mode = el('modeSelect').value;
+
+  // 防止空答案误提交（你也可以允许空提交）
+  if(!answer_text.trim()){
+    el('resultGrid').style.display = '';
+    el('scoreNum').textContent = '-';
+    el('feedback').innerHTML = `<span class="badge red">请先作答</span>`;
+    el('details').textContent = '';
+    return;
+  }
+
+  let out;
+  try {
+    out = await api(`/api/score?mode=${mode}`, {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ question_id: q.id, answer_text })
+    });
+  } catch (e) {
+    el('resultGrid').style.display = '';
+    el('scoreNum').textContent = '-';
+    el('feedback').innerHTML = `<span class="badge red">请求失败</span><div class="hr"></div><pre>${esc(String(e))}</pre>`;
+    el('details').textContent = '';
+    return;
+  }
+
+  // 先展示本题结果（可选）
+  el('resultGrid').style.display = '';
+  let scoreText = '-';
+  let feedbackHtml = '';
+
+  if (out.mode === 'rule') {
+    scoreText = out.score;
+    feedbackHtml = out.feedback?.length
+      ? `<div><b>提示</b><ul>${out.feedback.map(x => `<li>${esc(x)}</li>`).join('')}</ul></div>`
+      : `<div class="muted">规则评分：结构与关键词基本齐全 👍</div>`;
+  }
+
+  if (out.mode === 'llm') {
+    scoreText = out.llm?.score ?? '-';
+    feedbackHtml = renderLLMCard(out.llm);
+  }
+
+  if (out.mode === 'hybrid') {
+    scoreText = out.final_score ?? '-';
+    feedbackHtml = `
+      <div style="margin-top:6px">
+        <span class="badge">最终分：${esc(out.final_score)}/10</span>
+        <span class="badge gray">规则分：${esc(out.rule?.score)}</span>
+        <span class="badge gray">LLM分：${esc(out.llm?.score)}</span>
+        ${out.needs_review ? `<span class="badge red">建议人工复核</span>` : `<span class="badge green">一致性良好</span>`}
+      </div>
+      <div class="hr"></div>
+      ${renderLLMCard(out.llm)}
+    `;
+  }
+
+  el('scoreNum').textContent = scoreText;
+  el('feedback').innerHTML = feedbackHtml;
+  el('details').textContent = JSON.stringify(out, null, 2);
+
+  // ✅ 计入总分（若这题之前答过，先扣掉旧分）
+  const qid = q.id;
+  const newScore = pickScoreUsed(out);
+
+  if(state.results[qid]){
+    state.totalScore -= Number(state.results[qid].score_used || 0);
+  } else {
+    state.answeredCount += 1;
+  }
+
+  state.results[qid] = { mode: out.mode, score_used: newScore, raw: out };
+  state.totalScore += newScore;
+  updateProgressUI();
+
+  // ✅ 自动跳到下一题 / 或结束显示总结
+  const nextId = getNextQuestionId(qid);
+  if(nextId){
+    // 立即跳转（如果你想“停留 800ms 再跳”，把下面改成 setTimeout(()=>pickQuestion(nextId),800)）
+    pickQuestion(nextId);
+  } else {
+    showSummary();
+  }
+};
+
+loadLessons();
+updateProgressUI();
+</script>
+</body>
+</html> -->
+
+
+
+
+
+
+
+
+<!-- 没有flow版本 -->
+
+<!-- <!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>MW答题系统 Demo</title>
+  <style>
+    body{font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"PingFang SC","Microsoft Yahei",sans-serif;margin:0;background:#f6f7fb;}
+    .wrap{max-width:980px;margin:0 auto;padding:24px;}
+    .card{background:#fff;border-radius:14px;padding:18px 18px;box-shadow:0 6px 24px rgba(0,0,0,.06);margin-bottom:14px;}
+    h1{font-size:20px;margin:0 0 10px;}
+    .row{display:flex;gap:12px;flex-wrap:wrap}
+    select,textarea,button{font-size:14px}
+    select{padding:10px 12px;border-radius:10px;border:1px solid #d7d9e0;background:#fff}
+    textarea{width:100%;min-height:140px;border-radius:12px;border:1px solid #d7d9e0;padding:12px;line-height:1.5;resize:vertical}
+    button{padding:10px 14px;border-radius:12px;border:0;background:#111;color:#fff;cursor:pointer}
+    button.secondary{background:#e9ecf3;color:#111}
+    .pill{display:inline-block;padding:4px 10px;border-radius:999px;background:#eef2ff;font-size:12px;margin-right:6px}
+    .muted{color:#6b7280;font-size:13px}
+    .score{font-size:34px;font-weight:700}
+    .grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+    @media (max-width:820px){.grid{grid-template-columns:1fr}}
+    pre{white-space:pre-wrap;background:#0b1020;color:#d1e7ff;padding:12px;border-radius:12px;overflow:auto}
+    ul{margin:8px 0 0 18px}
+
+    /* LLM 可视化增强 */
+    .badge{display:inline-block;padding:3px 8px;border-radius:999px;font-size:12px;margin-right:6px;background:#eef2ff}
+    .badge.red{background:#fee2e2}
+    .badge.green{background:#dcfce7}
+    .badge.gray{background:#f1f5f9}
+    .kv{display:flex;gap:10px;flex-wrap:wrap;margin-top:8px}
+    .kv .item{background:#f6f7fb;border:1px solid #e5e7eb;border-radius:12px;padding:10px 12px}
+    .kv .label{color:#6b7280;font-size:12px}
+    .kv .value{font-size:16px;font-weight:700;margin-top:2px}
+    .hr{height:1px;background:#eef2f7;margin:12px 0}
+    .small{font-size:12px;color:#6b7280}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card">
+      <h1>MW答题系统 Demo（规则 / LLM / 混合评分）</h1>
+      <div class="row">
+        <div>
+          <div class="muted">选择课次</div>
+          <select id="lessonSelect"></select>
+        </div>
+
+        <div>
+          <div class="muted">选择题目</div>
+          <select id="questionSelect"></select>
+        </div>
+
+        <div>
+          <div class="muted">评分模式</div>
+          <select id="modeSelect">
+            <option value="rule">规则评分</option>
+            <option value="llm">大模型评分</option>
+            <option value="hybrid">混合评分</option>
+          </select>
+        </div>
+
+        <div style="margin-left:auto;display:flex;gap:10px;align-items:end">
+          <button class="secondary" id="btnShowRef">显示/隐藏参考答案</button>
+          <button id="btnScore">提交并评分</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" id="qCard" style="display:none">
+      <div class="muted">题干</div>
+      <div id="stem" style="margin-top:6px;font-size:16px;line-height:1.6"></div>
+      <div style="margin-top:10px">
+        <span class="pill">建议结构：判断 + 理由 + 解释 + 结果</span>
+      </div>
+      <div style="margin-top:12px" class="muted">作答</div>
+      <textarea id="answerBox" placeholder="例如：我不同意……因为……（写出整数部分/十分位等关键词）……所以……"></textarea>
+
+      <div id="refWrap" style="display:none;margin-top:12px">
+        <div class="muted">参考答案（Demo里默认可见，正式系统建议由老师控制是否展示）</div>
+        <pre id="refAns"></pre>
+      </div>
+    </div>
+
+    <div class="grid" id="resultGrid" style="display:none">
+      <div class="card">
+        <div class="muted">评分结果</div>
+        <div class="score" id="scoreNum">-</div>
+        <div class="muted">满分 10</div>
+        <div style="margin-top:10px" id="feedback"></div>
+      </div>
+      <div class="card">
+        <div class="muted">调试数据（Raw JSON）</div>
+        <pre id="details"></pre>
+      </div>
+    </div>
+  </div>
+
+<script>
+const state = { lessons: [], questions: [], currentQuestion: null, refVisible:false };
+
+async function api(path, opts){
+  const res = await fetch(path, opts);
+  if(!res.ok) throw new Error(await res.text());
+  return res.json();
+}
+
+function el(id){ return document.getElementById(id); }
+
+function esc(s){
+  return String(s ?? '').replace(/[&<>"']/g, m => ({
+    '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+  }[m]));
+}
+
+function renderLLMCard(llm){
+  if(!llm) return `<div class="muted">没有 LLM 输出</div>`;
+
+  const decision = llm.decision || '不确定';
+  const score = (llm.score ?? '-');
+  const conf = (llm.confidence ?? '-');
+
+  const decisionBadge =
+    decision === '同意' ? `<span class="badge green">同意</span>` :
+    decision === '不同意' ? `<span class="badge red">不同意</span>` :
+    `<span class="badge gray">不确定</span>`;
+
+  const strengths = (llm.strengths || []).map(x=>`<li>${esc(x)}</li>`).join('') || `<li class="muted">（无）</li>`;
+  const issues = (llm.issues || []).map(x=>`<li>${esc(x)}</li>`).join('') || `<li class="muted">（无）</li>`;
+  const miss = (llm.missing_points || []).map(x=>`<li>${esc(x)}</li>`).join('') || `<li class="muted">（无）</li>`;
+
+  return `
+    <div style="margin-top:6px">
+      ${decisionBadge}
+      <span class="badge">LLM评分：${esc(score)}/10</span>
+      <span class="badge gray">置信度：${esc(conf)}</span>
+    </div>
+
+    <div class="kv">
+      <div class="item">
+        <div class="label">判定</div>
+        <div class="value">${esc(decision)}</div>
+      </div>
+      <div class="item">
+        <div class="label">分数</div>
+        <div class="value">${esc(score)}</div>
+      </div>
+      <div class="item">
+        <div class="label">置信度</div>
+        <div class="value">${esc(conf)}</div>
+      </div>
+    </div>
+
+    <div class="hr"></div>
+
+    <div><b>✅ 优点</b><ul>${strengths}</ul></div>
+    <div><b>⚠️ 问题</b><ul>${issues}</ul></div>
+    <div><b>🧩 缺失点</b><ul>${miss}</ul></div>
+
+    <div class="hr"></div>
+
+    <div><b>✍️ 建议</b><div>${esc(llm.suggestion || '')}</div></div>
+  `;
+}
+
+function renderLessons(){
+  const sel = el('lessonSelect');
+  sel.innerHTML = state.lessons.map(l => `<option value="${esc(l.id)}">${esc(l.title)}</option>`).join('');
+  sel.onchange = () => loadQuestions(sel.value);
+}
+
+function renderQuestions(){
+  const sel = el('questionSelect');
+  sel.innerHTML = state.questions.map(q => `<option value="${esc(q.id)}">${esc(q.id)}</option>`).join('');
+  sel.onchange = () => pickQuestion(sel.value);
+  if(state.questions.length) pickQuestion(state.questions[0].id);
+}
+
+function pickQuestion(qid){
+  state.currentQuestion = state.questions.find(q => q.id === qid);
+  el('qCard').style.display = '';
+  el('stem').textContent = state.currentQuestion.stem;
+  el('refAns').textContent = state.currentQuestion.reference_answer;
+  el('answerBox').value = '';
+  el('resultGrid').style.display = 'none';
+}
+
+async function loadLessons(){
+  state.lessons = await api('/api/lessons');
+  renderLessons();
+  await loadQuestions(state.lessons[0]?.id);
+}
+
+async function loadQuestions(lessonId){
+  state.questions = await api('/api/questions?lesson_id=' + encodeURIComponent(lessonId));
+  renderQuestions();
+}
+
+el('btnShowRef').onclick = () => {
+  state.refVisible = !state.refVisible;
+  el('refWrap').style.display = state.refVisible ? '' : 'none';
+};
+
+el('btnScore').onclick = async () => {
+  const q = state.currentQuestion;
+  if(!q) return;
+
+  const answer_text = el('answerBox').value;
+  const mode = el('modeSelect').value;
+
+  let out;
+  try {
+    out = await api(`/api/score?mode=${mode}`, {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ question_id: q.id, answer_text })
+    });
+  } catch (e) {
+    el('resultGrid').style.display = '';
+    el('scoreNum').textContent = '-';
+    el('feedback').innerHTML = `<span class="badge red">请求失败</span><div class="hr"></div><pre>${esc(String(e))}</pre>`;
+    el('details').textContent = '';
+    return;
+  }
+
+  el('resultGrid').style.display = '';
+
+  let scoreText = '-';
+  let feedbackHtml = '';
+
+  if (out.mode === 'rule') {
+    scoreText = out.score;
+    feedbackHtml = out.feedback?.length
+      ? `<div><b>提示</b><ul>${out.feedback.map(x => `<li>${esc(x)}</li>`).join('')}</ul></div>`
+      : `<div class="muted">规则评分：结构与关键词基本齐全 👍</div>`;
+  }
+
+  if (out.mode === 'llm') {
+    scoreText = out.llm?.score ?? '-';
+    feedbackHtml = renderLLMCard(out.llm);
+  }
+
+  if (out.mode === 'hybrid') {
+    scoreText = out.final_score ?? '-';
+    feedbackHtml = `
+      <div style="margin-top:6px">
+        <span class="badge">最终分：${esc(out.final_score)}/10</span>
+        <span class="badge gray">规则分：${esc(out.rule?.score)}</span>
+        <span class="badge gray">LLM分：${esc(out.llm?.score)}</span>
+        ${out.needs_review ? `<span class="badge red">建议人工复核</span>` : `<span class="badge green">一致性良好</span>`}
+      </div>
+      <div class="hr"></div>
+      ${renderLLMCard(out.llm)}
+      <div class="hr"></div>
+      <div class="small">规则评分明细（便于对照）：</div>
+      <pre>${esc(JSON.stringify(out.rule, null, 2))}</pre>
+    `;
+  }
+
+  el('scoreNum').textContent = scoreText;
+  el('feedback').innerHTML = feedbackHtml;
+
+  // 右侧保留 raw json，方便你调试
+  el('details').textContent = JSON.stringify(out, null, 2);
+};
+
+loadLessons();
+</script>
+</body>
+</html> -->
+
+
