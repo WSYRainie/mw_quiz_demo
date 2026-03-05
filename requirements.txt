@@ -1,1 +1,4 @@
--r backend/requirements.txt
+fastapi==0.115.6
+uvicorn[standard]==0.30.6
+pydantic==2.9.2
+requests>=2.31.0
