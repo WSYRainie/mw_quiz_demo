@@ -196,7 +196,8 @@
               <th>本题得分</th>
               <th>规则分</th>
               <th>LLM分/最终</th>
-              <th>复核</th>
+              <th>LLM评分理由</th>
+              <!-- <th>复核</th> -->
             </tr>
           </thead>
           <tbody id="summaryTable"></tbody>
@@ -445,7 +446,7 @@ function showSummary(){
   tbody.innerHTML = state.questions.map(q => {
     const r = state.results[q.id];
     if(!r){
-      return `<tr><td>${esc(q.id)}</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td></tr>`;
+      return `<tr><td>${esc(q.id)}</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td></tr>`;
     }
     const out = r.raw;
     const mode = r.mode;
@@ -466,6 +467,11 @@ function showSummary(){
       mode === 'hybrid' ? `${out.llm?.score ?? '-'} / ${out.final_score ?? '-'}` :
       '-';
 
+    const reasonDisplay =
+      mode === 'rule'
+        ? (out.feedback?.[0] || '规则评分：按结构与关键词判分')
+        : (out.llm?.reason || out.llm?.suggestion || '-');
+
     const needs = mode === 'hybrid' && out.needs_review ? '⚠️' : '-';
 
     return `
@@ -475,6 +481,7 @@ function showSummary(){
         <td><b>${esc(scoreUsed)}</b></td>
         <td>${esc(ruleScoreDisplay)}</td>
         <td>${esc(llmOrFinalDisplay)}</td>
+        <td>${esc(reasonDisplay)}</td>
         <td>${esc(needs)}</td>
       </tr>
     `;
@@ -597,7 +604,8 @@ el('btnScore').onclick = async () => {
   // 自动下一题 / 总结页
   const nextId = getNextQuestionId(qid);
   if(nextId){
-    pickQuestion(nextId);
+    // pickQuestion(nextId);
+    setTimeout(() => pickQuestion(nextId), 1500);
   } else {
     showSummary();
   }
