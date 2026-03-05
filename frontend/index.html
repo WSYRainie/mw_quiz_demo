@@ -241,6 +241,7 @@ function renderLLMCard(llm){
   const decision = llm.decision || '不确定';
   const score = (llm.score ?? '-');
   const conf = (llm.confidence ?? '-');
+  const reason = llm.reason || llm.suggestion || '暂无评分理由';
 
   const decisionBadge =
     decision === '同意' ? `<span class="badge green">同意</span>` :
@@ -272,6 +273,10 @@ function renderLLMCard(llm){
         <div class="value">${esc(conf)}</div>
       </div>
     </div>
+
+    <div class="hr"></div>
+
+    <div><b>📝 一句话理由</b><div>${esc(reason)}</div></div>
 
     <div class="hr"></div>
 
@@ -446,17 +451,30 @@ function showSummary(){
     const mode = r.mode;
     const scoreUsed = r.score_used;
 
-    const ruleScore = out.rule?.score ?? (out.score ?? '-');
-    const llmScore = out.llm?.score ?? (out.final_score ?? '-');
-    const needs = out.needs_review ? '⚠️' : '';
+    const modeLabel =
+      mode === 'llm' ? 'LLM' :
+      mode === 'hybrid' ? '混合' :
+      mode === 'rule' ? '规则' : mode;
+
+    const ruleScoreDisplay =
+      mode === 'rule' ? (out.score ?? '-') :
+      mode === 'hybrid' ? (out.rule?.score ?? '-') :
+      '-';
+
+    const llmOrFinalDisplay =
+      mode === 'llm' ? (out.llm?.score ?? '-') :
+      mode === 'hybrid' ? `${out.llm?.score ?? '-'} / ${out.final_score ?? '-'}` :
+      '-';
+
+    const needs = mode === 'hybrid' && out.needs_review ? '⚠️' : '-';
 
     return `
       <tr>
         <td>${esc(q.id)}</td>
-        <td>${esc(mode)}</td>
+        <td>${esc(modeLabel)}</td>
         <td><b>${esc(scoreUsed)}</b></td>
-        <td>${esc(ruleScore)}</td>
-        <td>${esc(llmScore)}</td>
+        <td>${esc(ruleScoreDisplay)}</td>
+        <td>${esc(llmOrFinalDisplay)}</td>
         <td>${esc(needs)}</td>
       </tr>
     `;
@@ -1341,5 +1359,3 @@ loadLessons();
 </script>
 </body>
 </html> -->
-
-
