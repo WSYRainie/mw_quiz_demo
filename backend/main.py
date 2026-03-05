@@ -180,6 +180,7 @@ def score_answer_ollama(stem: str, reference_answer: str, rubric: dict, answer_t
   "issues": ["..."],
   "missing_points": ["..."],
   "suggestion": "...",
+  "reason": "一句话评分理由",
   "confidence": 0 到 1 的小数
 }}
 
@@ -224,6 +225,20 @@ def score_answer_ollama(stem: str, reference_answer: str, rubric: dict, answer_t
                 raise RuntimeError(f"LLM输出缺少字段 {k}; raw={txt[:300]}")
         obj["score"] = max(0, min(10, int(obj["score"])))
         obj["confidence"] = max(0.0, min(1.0, float(obj["confidence"])))
+        reason = str(obj.get("reason", "")).strip()
+        if not reason:
+            issues = obj.get("issues") or []
+            strengths = obj.get("strengths") or []
+            suggestion = str(obj.get("suggestion", "")).strip()
+            if issues:
+                reason = f"主要失分点：{issues[0]}"
+            elif strengths:
+                reason = f"得分依据：{strengths[0]}"
+            elif suggestion:
+                reason = suggestion[:80]
+            else:
+                reason = "答案与评分细则匹配度一般。"
+        obj["reason"] = reason
         return obj
 
     # 一次解析
